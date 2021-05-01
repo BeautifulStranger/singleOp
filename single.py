@@ -76,15 +76,20 @@ def decode_binary_instruction(bin_instruction):
 	return str_instruction[0:4] + " " + str_instruction[4:8]
 
 def update_memory_view(*args):
+	print(text)
 	for i in range(24):
-		memory_position = i - highlight_pos + current_instruction
+		memory_position = i - 8 + scroll_position
 		if len(memory) > memory_position >= 0:
 			memory_labels[i].configure(text = "{:02x}: ".format(memory_position) + decode_binary_instruction(memory[memory_position]) + "({:03d})".format(memory[memory_position]))
 		else:
 			memory_labels[i].configure(text = "")
+		if highlight_pos == i:
+			memory_labels[i].configure(background = view_color[emulator_state])
+		else:
+			memory_labels[i].configure(background = 'light gray')
 
 def increment_instruction(reverse = False):
-	global current_instruction
+	global current_instruction, scroll_position, highlight_pos
 	direction = 1
 	if reverse:
 		direction = -1
@@ -92,6 +97,8 @@ def increment_instruction(reverse = False):
 	current_instruction = check_bound % len(memory)
 	#if len(memory) > check_bound >= 0:
 	#	current_instruction = check_bound
+	scroll_position = current_instruction
+	highlight_pos = 8
 	update_memory_view()
 
 def input_validator(text):
@@ -131,11 +138,31 @@ def add_instruction(*args):
 	except ValueError:
 		pass
 
-def roll_list(reverse = False):
-	if emulator_state != "edit":
-		update_emulator("edit")
-	increment_instruction(reverse)
+def scroll_view(reverse):
+	global scroll_position, highlight_pos
+	if reverse and scroll_position > 0:
+		scroll_position -= 1
+	elif scroll_position < len(memory) and not reverse:
+		scroll_position += 1
+	highlight_pos = 8 + current_instruction - scroll_position
+	update_memory_view()
 
+
+def roll_list(reverse = False):
+	if emulator_state != "edit" and emulator_state != "step":
+		update_emulator("edit")
+	if emulator_state == "edit":
+		increment_instruction(reverse)
+	elif emulator_state != "run":
+		scroll_view(reverse)
+	else:
+		pass
+
+def catch_whell(self,event):
+	if event.delta > 0:
+		roll_list()
+	else:
+		roll_list(reverse)
 
 def run_program(*args):
 	update_emulator("run")
@@ -148,9 +175,11 @@ def step_program(*args):
 
 def reset_program(*args):
 	# Reset memory viewer
-	global current_instruction, memory, inner_step
+	global current_instruction, memory, inner_step, scroll_position, highlight_pos
 	inner_step = 0
 	current_instruction = 0
+	scroll_position = 0
+	highlight_pos = 8
 	for i in range(len(program_code)):
 		memory[i] = program_code[i]
 	update_memory_view()
@@ -168,20 +197,21 @@ def clear_memory(*args):
 	reset_program()
 
 def update_emulator(state):
+	global emulator_state
 	if state == "step":
-		emulator_state = "step"
+		emulator_state = state
 		# Buttons
 		add_button.state(['disabled'])
-		up_button.state(['disabled'])
-		down_button.state(['disabled'])
+		up_button.state(['!disabled'])
+		down_button.state(['!disabled'])
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
 		# Labels
-		memory_labels[highlight_pos].configure(background = 'light pink')
+		memory_labels[highlight_pos].configure(background = view_color[state])
 		stat_message.configure(text = "Stepping", foreground = 'magenta')
 
 	elif state == "run":
-		emulator_state = "run"
+		emulator_state = state
 		# Buttons
 		add_button.state(['disabled'])
 		up_button.state(['disabled'])
@@ -190,11 +220,11 @@ def update_emulator(state):
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
 		# Labels
-		memory_labels[highlight_pos].configure(background= 'light gray')
+		memory_labels[highlight_pos].configure(background= view_color[state])
 		stat_message.configure(text = "Running", foreground = 'black')
 
 	elif state == "edit":
-		emulator_state = "edit"
+		emulator_state = state
 		# Buttons
 		step_button.state(['disabled'])
 		run_button.state(['disabled'])
@@ -202,11 +232,11 @@ def update_emulator(state):
 		'''for option in radio_numb_rep.winfo_children():
 			option.state(['disabled'])'''
 		# Labels
-		memory_labels[highlight_pos].configure(background= 'light green')
+		memory_labels[highlight_pos].configure(background= view_color[state])
 		stat_message.configure(text = "Editing", foreground = 'green')
 
 	elif state == "ready":
-		emulator_state = "ready"
+		emulator_state = state
 		# Buttons
 		add_button.state(['disabled'])
 		up_button.state(['!disabled'])
@@ -216,7 +246,7 @@ def update_emulator(state):
 		clear_button.state(['!disabled'])
 		new_instruction.state(['!disabled'])
 		# Labels
-		memory_labels[highlight_pos].configure(background= 'light blue')
+		memory_labels[highlight_pos].configure(background= view_color[state])
 		idv_A.configure(text = "A:")
 		idv_B.configure(text = "B:")
 		idv_C.configure(text = "C:")
@@ -224,13 +254,15 @@ def update_emulator(state):
 		stat_message.configure(text = "Ready", foreground = 'blue')
 
 # Variables
-global current_instruction
-global memory, program_code
+global current_instruction, highlight_pos, scroll_position
+global memory, program_code, emulator_state
 current_instruction = 0
 emulator_state = "ready"
 highlight_pos = 8
+scroll_position = 0
 global inner_step
 inner_step = 0
+view_color = {"step":'light pink', "run":'light gray', "edit":'light green', "ready":'light blue'}
 
 # Create Main Window
 root = Tk()
@@ -251,6 +283,7 @@ program_code = [i  for i in range(initial_memory)]
 ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=1, row=0, stick=(W, E))
 memory_view = ttk.Frame(mainframe, relief="ridge", padding="3 3 3 3")
 memory_view.grid(column=1, row=1, rowspan=10, stick=(N, W, E, S))
+memory_view.bind("<MouseWheel>", catch_whell)
 
 memory_labels = []
 for i in range(24):
