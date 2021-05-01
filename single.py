@@ -1,8 +1,57 @@
+'''
+To Do
+At the moment the memory values are not capped to 8bits
+Negative number display is broken
+'''
+
+
 from tkinter import *
 from tkinter import ttk
 
-def processor(instruction_addr):
-	pass
+def halt_execution(reason=""):
+	run_button.state(['disabled'])
+	step_button.state(['disabled'])
+	if reason == "memory":
+		message = "Ops! Access out of bounds. "
+	stat_message.configure(text = message + "Halted.", foreground = "red")
+
+def memory_read(address):
+	try:
+		data = memory[address]
+		return data
+	except IndexError:
+		halt_execution("memory")
+		return 0
+
+def memory_write(address, value):
+	global memory
+	try:
+		memory[address] = value
+	except IndexError:
+		halt_execution("memory")
+
+def processor():
+	global inner_step, memory, current_instruction
+	k = memory_read(current_instruction)
+	if inner_step == 0:
+		idv_A.configure(text = "A: " + decode_binary_instruction(memory_read(k)))
+		idv_B.configure(text="B:")
+		idv_C.configure(text="C:")
+		idv_Z.configure(text="Z:")
+		inner_step += 1
+	elif inner_step == 1:
+		idv_B.configure(text = "B: " + decode_binary_instruction(memory_read(k)))
+		inner_step += 1
+	elif inner_step == 2:
+		idv_C.configure(text = "C: " + decode_binary_instruction(k))
+		inner_step = 0
+		a = memory_read(memory_read(current_instruction - 2))
+		b = memory_read(memory_read(current_instruction - 1))
+		z = b - a
+		idv_Z.configure(text = "Z: " + decode_binary_instruction(z))
+		memory_write(memory_read(current_instruction - 1), z)
+		if 0 >= z:
+			current_instruction = k - 1
 
 def encode_binary_instruction(str_instruction):
 	str_base = (numerical_rep.get())[-1]
@@ -12,26 +61,19 @@ def encode_binary_instruction(str_instruction):
 		base = 2
 	else:
 		base = 10
-	a,b,c = str_instruction.split()
-	a = a + '00000000'
-	b = b + '0000'
-	return int(a, base) + int(b, base) + int(c, base)
+	return int(str_instruction, base)
 
 def decode_binary_instruction(bin_instruction):
 	str_instruction = format(bin_instruction, numerical_rep.get())
-	return ' '.join(str_instruction[i:i+4] for i in (0,4,8))
+	return str_instruction[0:4] + " " + str_instruction[4:8]
 
 def update_memory_view(*args):
 	for i in range(24):
 		memory_position = i - highlight_pos + current_instruction
 		if len(memory) > memory_position >= 0:
-			memory_labels[i].configure(text = "{:04x}: ".format(memory_position) + decode_binary_instruction(memory[memory_position]))
+			memory_labels[i].configure(text = "{:04x}: ".format(memory_position) + decode_binary_instruction(memory[memory_position]) + "({})".format(memory[memory_position]))
 		else:
 			memory_labels[i].configure(text = "")
-	value_A, value_B, value_C = decode_binary_instruction(memory[current_instruction]).split()
-	idv_A.configure(text = "A: " + value_A)
-	idv_B.configure(text = "B: " + value_B)
-	idv_C.configure(text = "C: " + value_C)
 
 def increment_instruction(reverse = False):
 	global current_instruction
@@ -39,9 +81,10 @@ def increment_instruction(reverse = False):
 	if reverse:
 		direction = -1
 	check_bound = current_instruction + direction
-	if len(memory) > check_bound >= 0:
-		current_instruction = check_bound
-		update_memory_view()
+	current_instruction = check_bound % len(memory)
+	#if len(memory) > check_bound >= 0:
+	#	current_instruction = check_bound
+	update_memory_view()
 
 def input_validator(text):
 	is_valid = False
@@ -54,20 +97,26 @@ def input_validator(text):
 		pattern = '^[0-9]*$'
 	stripped = text.split()
 	add_button.state(['disabled'])
-	if len(stripped) == 3:
-		if re.match(pattern, stripped[0]) and re.match(pattern, stripped[1]) and re.match(pattern, stripped[2]):
-			add_button.state(['!disabled'])
+	if len(stripped) == 1:
+		if re.match(pattern, stripped[0]):
+			if 256 > encode_binary_instruction(stripped[0]) >= 0:
+				add_button.state(['!disabled'])
 	return True
 
 def add_instruction(*args):
 	try:
-		global memory
+		global memory, program_code
 		value = new_instruction.get()
 		if emulator_state != "edit":
 			update_emulator("edit")
 		memory[current_instruction] = encode_binary_instruction(value)
+		program_code[current_instruction] = memory[current_instruction]
+		if current_instruction + 1 == len(memory):
+			memory.append(0)
+			program_code.append(0)
 		increment_instruction()
 		new_instruction.delete(0, 'end')
+		new_instruction.focus()
 
 	except ValueError:
 		pass
@@ -84,55 +133,70 @@ def run_program(*args):
 def step_program(*args):
 	if emulator_state != "step":
 		update_emulator("step")
-	processor(current_instruction)
+	processor()
 	increment_instruction()
 
 def reset_program(*args):
 	# Reset memory viewer
-	global current_instruction
+	global current_instruction, memory
 	current_instruction = 0
+	for i in range(len(program_code)):
+		memory[i] = program_code[i]
 	update_memory_view()
 	new_instruction.delete(0, 'end')
-	# Reset buttons' states and viwer color
+	# Reset buttons' states, labels and viwer color
 	update_emulator("ready")
 
 def clear_memory(*args):
-	for i in range(len(memory)):
-		memory[i] = 0
+	global program_code
+	for i in range(len(program_code)):
+		program_code[i] = 0
+	# Enable representation choice
 	for option in radio_numb_rep.winfo_children():
 		option.state(['!disabled'])
 	reset_program()
 
 def update_emulator(state):
 	if state == "step":
+		emulator_state = "step"
+		# Buttons
 		add_button.state(['disabled'])
 		up_button.state(['disabled'])
 		down_button.state(['disabled'])
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
+		# Labels
 		memory_labels[highlight_pos].configure(background = 'light pink')
-		emulator_state = "step"
+		stat_message.configure(text = "Stepping", foreground = 'magenta')
 
 	elif state == "run":
+		emulator_state = "run"
+		# Buttons
 		add_button.state(['disabled'])
 		up_button.state(['disabled'])
 		down_button.state(['disabled'])
 		step_button.state(['disabled'])
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
+		# Labels
 		memory_labels[highlight_pos].configure(background= 'light gray')
-		emulator_state = "run"
+		stat_message.configure(text = "Running", foreground = 'black')
 
 	elif state == "edit":
+		emulator_state = "edit"
+		# Buttons
 		step_button.state(['disabled'])
 		run_button.state(['disabled'])
 		new_instruction.state(['!disabled'])
-		memory_labels[highlight_pos].configure(background= 'light green')
-		emulator_state = "edit"
 		for option in radio_numb_rep.winfo_children():
 			option.state(['disabled'])
+		# Labels
+		memory_labels[highlight_pos].configure(background= 'light green')
+		stat_message.configure(text = "Editing", foreground = 'green')
 
 	elif state == "ready":
+		emulator_state = "ready"
+		# Buttons
 		add_button.state(['disabled'])
 		up_button.state(['!disabled'])
 		down_button.state(['!disabled'])
@@ -140,16 +204,22 @@ def update_emulator(state):
 		step_button.state(['!disabled'])
 		clear_button.state(['!disabled'])
 		new_instruction.state(['!disabled'])
+		# Labels
 		memory_labels[highlight_pos].configure(background= 'light blue')
-		emulator_state = "ready"
-
+		idv_A.configure(text = "A:")
+		idv_B.configure(text = "B:")
+		idv_C.configure(text = "C:")
+		idv_Z.configure(text = "Z:")
+		stat_message.configure(text = "Ready", foreground = 'blue')
 
 # Variables
 global current_instruction
-global memory
+global memory, program_code
 current_instruction = 0
 emulator_state = "ready"
 highlight_pos = 8
+global inner_step
+inner_step = 0
 
 # Create Main Window
 root = Tk()
@@ -163,6 +233,7 @@ root.rowconfigure(0, weight=1)
 # Initialize Memory
 initial_memory = 30
 memory = [i  for i in range(initial_memory)]
+program_code = [i  for i in range(initial_memory)]
 
 # Create memory view box
 ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=1, row=0, stick=(W, E))
@@ -206,25 +277,28 @@ down_button.grid(column=2, row=4, stick=W)
 # Number representation selection
 radio_numb_rep = ttk.Frame(mainframe, relief = "solid", padding="2 2 2 2")
 radio_numb_rep.grid(column=2, row=1, rowspan=2, stick=(W, E))
-numerical_rep = StringVar(root, '012x')
+numerical_rep = StringVar(root, '08x')
 numerical_rep.trace_add('write', update_memory_view) # Invoke update_memory_view  when numerical_rep is written
-radio_dec = ttk.Radiobutton(radio_numb_rep, text = "Dec", value='012d', variable = numerical_rep)
-radio_dec.grid(column=0, row=0, stick=W)
-radio_hex = ttk.Radiobutton(radio_numb_rep, text = "Hex", value='012x', variable = numerical_rep)
-radio_hex.grid(column=0, row=1, stick=W)
-radio_bin = ttk.Radiobutton(radio_numb_rep, text = "Bin", value='012b', variable = numerical_rep)
-radio_bin.grid(column=0, row=2, stick=W)
+ttk.Radiobutton(radio_numb_rep, text = "Dec", value='08d', variable = numerical_rep).grid(column=0, row=0, stick=W)
+ttk.Radiobutton(radio_numb_rep, text = "Hex", value='08x', variable = numerical_rep).grid(column=0, row=1, stick=W)
+ttk.Radiobutton(radio_numb_rep, text = "Bin", value='08b', variable = numerical_rep).grid(column=0, row=2, stick=W)
 
+# Status viewer
+stat_message = ttk.Label(mainframe, text = "")
+stat_message.grid(column=2, row=0, columnspan=2, stick=W)
 
 # Instruction decoder viewer
-idv_A = ttk.Label(mainframe, text="")
-idv_A.grid(column=3, row=6, stick=W)
+idv_A = ttk.Label(mainframe, text="A:")
+idv_A.grid(column=2, row=6, stick=W)
 
-idv_B = ttk.Label(mainframe, text="")
-idv_B.grid(column=3, row=7, stick=W)
+idv_B = ttk.Label(mainframe, text="B:")
+idv_B.grid(column=2, row=7, stick=W)
 
-idv_C = ttk.Label(mainframe, text="")
-idv_C.grid(column=3, row=8, stick=W)
+idv_C = ttk.Label(mainframe, text="C:")
+idv_C.grid(column=2, row=8, stick=W)
+
+idv_Z = ttk.Label(mainframe, text="Z:")
+idv_Z.grid(column=3, row=7, stick=W)
 
 for child in mainframe.winfo_children():
 	child.grid_configure(padx=5, pady=5)
