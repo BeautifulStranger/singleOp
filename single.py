@@ -76,7 +76,6 @@ def decode_binary_instruction(bin_instruction):
 	return str_instruction[0:4] + " " + str_instruction[4:8]
 
 def update_memory_view(*args):
-	print(text)
 	for i in range(24):
 		memory_position = i - 8 + scroll_position
 		if len(memory) > memory_position >= 0:
@@ -158,11 +157,11 @@ def roll_list(reverse = False):
 	else:
 		pass
 
-def catch_whell(self,event):
-	if event.delta > 0:
+def catch_whell(event):
+	if event.num == 4:
 		roll_list()
 	else:
-		roll_list(reverse)
+		roll_list(True)
 
 def run_program(*args):
 	update_emulator("run")
@@ -283,7 +282,8 @@ program_code = [i  for i in range(initial_memory)]
 ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=1, row=0, stick=(W, E))
 memory_view = ttk.Frame(mainframe, relief="ridge", padding="3 3 3 3")
 memory_view.grid(column=1, row=1, rowspan=10, stick=(N, W, E, S))
-memory_view.bind("<MouseWheel>", catch_whell)
+memory_view.bind_all("<Button-4>", catch_whell)
+memory_view.bind_all("<Button-5>", catch_whell)
 
 memory_labels = []
 for i in range(24):
