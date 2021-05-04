@@ -19,6 +19,7 @@ def wrap_around(number):
 def halt_execution(reason=""):
 	run_button.state(['disabled'])
 	step_button.state(['disabled'])
+	message = ""
 	if reason == "memory":
 		message = "Ops! Access out of bounds. "
 	stat_message.configure(text = message + "Halted.", foreground = "red")
@@ -59,6 +60,8 @@ def processor():
 		idv_Z.configure(text = "Z: " + decode_binary_instruction(z) + "(" + signed_decimal(z) + ")")
 		memory_write(memory_read(current_instruction - 1), z)
 		if z >= 128 or z == 0:
+			if k == 255:
+				halt_execution()
 			current_instruction = k - 1
 
 def encode_binary_instruction(str_instruction):
