@@ -17,8 +17,11 @@ def wrap_around(number):
 		return number
 
 def halt_execution(reason=""):
+	global interrupt
+	interrupt = True
 	run_button.state(['disabled'])
 	step_button.state(['disabled'])
+	reset_button.state(['!disabled'])
 	message = ""
 	if reason == "memory":
 		message = "Ops! Access out of bounds. "
@@ -205,12 +208,24 @@ def catch_whell(event):
 		roll_list()
 	else:
 		roll_list(True)
+def run_loop():
+	if (not interrupt):
+		step_program()
+		root.after(50, run_loop)
 
 def run_program(*args):
-	update_emulator("run")
+	global interrupt
+	interrupt = False
+	if emulator_state != "run":
+		update_emulator("run")
+		run_loop()
+	else:
+		interrupt = True
+		update_emulator("step")
+		reset_button.state(['!disabled'])
 
 def step_program(*args):
-	if emulator_state != "step":
+	if emulator_state != "step" and emulator_state != "run":
 		update_emulator("step")
 	processor()
 	increment_instruction()
@@ -226,6 +241,8 @@ def reset_program(*args):
 		memory[i] = program_code[i]
 	update_memory_view()
 	new_instruction.delete(0, 'end')
+	# Reset display
+	display_driver(255)
 	# Reset buttons' states, labels and viwer color
 	update_emulator("ready")
 
@@ -248,6 +265,8 @@ def update_emulator(state):
 		down_button.state(['!disabled'])
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
+		step_button.state(['!disabled'])
+		run_button.configure(text = "Run")
 		# Labels
 		memory_labels[highlight_pos].configure(background = view_color[state])
 		stat_message.configure(text = "Stepping", foreground = 'magenta')
@@ -261,6 +280,9 @@ def update_emulator(state):
 		step_button.state(['disabled'])
 		clear_button.state(['disabled'])
 		new_instruction.state(['disabled'])
+		## Attention
+		run_button.configure(text = "Stop")
+		reset_button.state(['disabled'])
 		# Labels
 		memory_labels[highlight_pos].configure(background= view_color[state])
 		stat_message.configure(text = "Running", foreground = 'black')
@@ -287,6 +309,7 @@ def update_emulator(state):
 		step_button.state(['!disabled'])
 		clear_button.state(['!disabled'])
 		new_instruction.state(['!disabled'])
+		run_button.configure(text = "Run")
 		# Labels
 		memory_labels[highlight_pos].configure(background= view_color[state])
 		idv_A.configure(text = "A:")
@@ -351,8 +374,12 @@ root.rowconfigure(0, weight=1)
 # Initialize Memory
 initial_memory = 30
 max_memory = 255 # Reserved address 0xff to display
-memory = [i  for i in range(initial_memory)]
-program_code = [i  for i in range(initial_memory)]
+#zeros = [0 for i in range(initial_memory)]
+hello_world = [12, 12, 3, 36, 37, 6, 37, 12, 9, 37, 37, 12, 0, 255, 15, 38, 36, 18, 12, 12, 21, 52, 37, 24, 37, 12, 27, 37, 37, 30, 36, 12, 255, 37, 37, 0, 39, 0, 255, 72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 52]
+program_code = hello_world.copy()
+memory = []
+for i in range(len(program_code)):
+	memory.append(program_code[i])
 
 # Create memory view box
 ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=0, row=0, stick=(W, E))
