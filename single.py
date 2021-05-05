@@ -24,9 +24,46 @@ def halt_execution(reason=""):
 		message = "Ops! Access out of bounds. "
 	stat_message.configure(text = message + "Halted.", foreground = "red")
 
+def display_driver(value):
+	global cursor_position
+	character = display_lookup[wrap_around(256 - value)]
+	current_column = cursor_position % 16
+	current_line = int((cursor_position - current_column)/16)
+	if character == 'NOP':
+		pass
+	elif character == 'CD': # Clear display
+		for i in range(display_lines):
+			for j in range(display_columns):
+				display_characters[i][j].configure(text = '')
+		cursor_position = 0
+	elif character == 'LE': # Line end
+		cursor_position = 16*current_line + 15
+	elif character == 'CL': # Clear line
+		for i in range(display_columns):
+			display_characters[current_line][i].configure(text = '')
+			cursor_position = 16 * current_line
+	elif character == 'BS': # Back space
+		cursor_position -= 1
+		bs_column = cursor_position % 16
+		bs_row = int((cursor_podition - bs_column)/16)
+		display_characters[bs_row][bs_column].configure(text = '')
+	elif character == 'LF':	# Line feed
+		cursor_position = (cursor_position + 16) % 32
+	elif character == 'CR': # Carriage return
+		cursor_position = 16*current_line
+	elif character[0:2] == 'ch': # Select character
+		cursor_position = int(character[2], 16) + 16*((value % 16) - 8)
+	else:
+		display_characters[current_line][current_column].configure(text = character)
+		cursor_position = (cursor_position + 1) % 32
+
+
 def memory_read(address):
 	try:
-		data = memory[address]
+		if address != 255:
+			data = memory[address]
+		else:
+			data = 0
 		return data
 	except IndexError:
 		halt_execution("memory")
@@ -35,7 +72,10 @@ def memory_read(address):
 def memory_write(address, value):
 	global memory
 	try:
-		memory[address] = value
+		if address == 255:
+			display_driver(value)
+		else:
+			memory[address] = value
 	except IndexError:
 		halt_execution("memory")
 
@@ -266,6 +306,39 @@ global inner_step
 inner_step = 0
 view_color = {"step":'light pink', "run":'light gray', "edit":'light green', "ready":'light blue'}
 
+display_lookup = ['NOP','CD',	'NOP',	'LE',	'CL',	'NOP',	'NOP',	'NOP',	'BS',	'NOP',	'LF',	'NOP',	'NOP',	'CR',	'NOP',	'NOP',	#00
+		  'NOP','NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	'NOP',	#10
+		  ' ',	'!',	'"',	'#',	'$',	'%',	'&',	'\'',	'(',	')',	'*',	'+',	',',	'-',	'.',	'/',	#20
+		  '0',	'1',	'2',	'3',	'4',	'5',	'6',	'7',	'8',	'9',	':',	';',	'<',	'=',	'>',	'?',	#30
+		  '@',	'A',	'B',	'C',	'D',	'E',	'F',	'G',	'H',	'I',	'J',	'K',	'L',	'M',	'N',	'O',	#40
+		  'P',	'Q',	'R',	'S',	'T',	'U',	'V',	'W',	'X',	'Y',	'Z',	'[',	'\\',	']',	'^',	'_',	#50
+		  '`',	'a',	'b',	'c',	'd',	'e',	'f',	'g',	'h',	'i',	'j',	'k',	'l',	'm',	'n',	'o',	#60
+		  'p',	'q',	'r',	's',	't',	'u',	'v',	'w',	'x',	'y',	'z',	'{',	'|',	'}',	'~',	'NOP']	#70
+		  #00	#01	#02	#03	#04	#05	#06	#07	#08	#09	#0a	#0b	#0c	#0d	#0e	#0f
+
+'''
+display_lookup = ['NOP','NOP',' ', '0','@','P', '`','p',  'ch0','ch0','NOP','°','À','Ð','à','ð',  	#00
+		  'CD',	'NOP','!', '1','A','Q', 'a','q',  'ch1','ch1','¡',  '±','Á','Ñ','á','ñ',	#10
+		  'NOP','NOP','"', '2','B','R', 'b','r',  'ch2','ch2','¢',  '²','Â','Ò','â','ò', 	#20
+		  'LE',	'NOP','#', '3','C','S', 'c','s',  'ch3','ch3','£',  '³','Ã','Ó','ã','ó', 	#30
+		  'CL',	'NOP','$', '4','D','T', 'd','t',  'ch4','ch4','¤',  '´','Ä','Ô','ä','ô', 	#40
+		  'NOP','NOP','%', '5','E','U', 'e','u',  'ch5','ch5','¥',  'µ','Å','Õ','å','õ', 	#50
+		  'NOP','NOP','&', '6','F','V', 'f','v',  'ch6','ch6','¦',  '¶','Æ','Ö','æ','ö', 	#60
+		  'NOP','NOP','\'','7','G','W', 'g','w',  'ch7','ch7','§',  '·','Ç','×','ç','÷', 	#70
+		  'BS',	'NOP','(', '8','H','X', 'h','x',  'ch8','ch8','¨',  '¸','È','Ø','è','ø', 	#80
+		  'NOP','NOP',')', '9','I','Y', 'i','y',  'ch9','ch9','©',  '¹','É','Ù','é','ù', 	#90
+		  'LF',	'NOP','*', ':','J','Z', 'j','z',  'cha','cha','ª',  'º','Ê','Ú','ê','ú', 	#a0
+		  'NOP','NOP','+', ';','K','[', 'k','{',  'chb','chb','«',  '»','Ë','Û','ë','û', 	#b0
+		  'NOP','NOP',',', '<','L','\\','l','|',  'chc','chc','¬',  '¼','Ì','Ü','ì','ü', 	#c0
+		  'CR',	'NOP','-', '=','M',']', 'm','}',  'chd','chd','NOP','½','Í','Ý','í','ý', 	#d0
+		  'NOP','NOP','.', '>','N','^', 'n','~',  'che','che','®',  '¾','Î','Þ','î','þ', 	#e0
+		  'NOP','NOP','/', '?','O','_', 'o','NOP','chf','chf','¯',  '¿','Ï','ß','ï','ÿ']	#f0
+		   #00,	#01,  #02, #03,#04,#05, #06,#07,  #08,  #09,  #0a,  #0b,#0c,#0d,#0e,#0f
+'''
+
+
+
+
 # Create Main Window
 root = Tk()
 root.title("Single Operation Computer")
@@ -277,63 +350,68 @@ root.rowconfigure(0, weight=1)
 
 # Initialize Memory
 initial_memory = 30
-max_memory = 256
+max_memory = 255 # Reserved address 0xff to display
 memory = [i  for i in range(initial_memory)]
 program_code = [i  for i in range(initial_memory)]
 
 # Create memory view box
-ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=1, row=0, stick=(W, E))
+ttk.Label(mainframe, text="MEMORY", justify="center", anchor="center",  background="light blue", relief="raised").grid(column=0, row=0, stick=(W, E))
 memory_view = ttk.Frame(mainframe, relief="ridge", padding="3 3 3 3")
-memory_view.grid(column=1, row=1, rowspan=10, stick=(N, W, E, S))
+memory_view.grid(column=0, row=1, rowspan=9, stick=(N, W, E, S))
 memory_view.bind_all("<Button-4>", catch_whell)
 memory_view.bind_all("<Button-5>", catch_whell)
 
 memory_labels = []
 for i in range(24):
 	memory_labels.append(ttk.Label(memory_view, text = "", font = "TkFixedFont"))
-	memory_labels[i].grid(column=1, row = i, stick=W)
+	memory_labels[i].grid(column=0, row = i, stick=W)
 
 # Instruction box
 instruction = StringVar()
 new_instruction = ttk.Entry(mainframe, width=7, textvariable=instruction)
-new_instruction.grid(column=2, row=10, columnspan=2, stick=(W, E))
+new_instruction.grid(column=1, row=9, columnspan=2, stick=(W, E))
 validate_input = (root.register(input_validator), '%P')
 new_instruction.configure(validate = 'key', validatecommand=validate_input)
 
 # Create buttons
 add_button = ttk.Button(mainframe, text="Add Intruction", command=add_instruction)
-add_button.grid(column=2, row=9, columnspan=2, stick=(W, E))
+add_button.grid(column=1, row=10, columnspan=2, stick=(W, E))
 
 run_button = ttk.Button(mainframe, text="Run", command=run_program)
-run_button.grid(column=3, row=1, stick=W)
+run_button.grid(column=2, row=3, stick=W)
 
 step_button = ttk.Button(mainframe, text="Step", command=step_program)
-step_button.grid(column=3, row=2, stick=W)
+step_button.grid(column=2, row=4, stick=W)
 
 reset_button = ttk.Button(mainframe, text="Reset", command=reset_program)
-reset_button.grid(column=3, row=3, stick=W)
+reset_button.grid(column=1, row=5, stick=W)
 
 clear_button = ttk.Button(mainframe, text="Clear memory", command=clear_memory)
-clear_button.grid(column=3, row=4, stick=W)
+clear_button.grid(column=2, row=5, stick=W)
 
 up_button = ttk.Button(mainframe, text="^", command=lambda: roll_list(reverse = True))
-up_button.grid(column=2, row=3, stick=W)
+up_button.grid(column=1, row=3, stick=W)
 
 down_button = ttk.Button(mainframe, text="v", command=lambda: roll_list())
-down_button.grid(column=2, row=4, stick=W)
+down_button.grid(column=1, row=4, stick=W)
 
 # Number representation selection
 # Input
 radio_numb_rep_in = ttk.Frame(mainframe, relief = "solid", padding="2 2 2 2")
-radio_numb_rep_in.grid(column=2, row=1, rowspan=2, stick=(W, E))
+radio_numb_rep_in.grid(column=1, row=8, columnspan=2, stick=(W, E))
+radio_numb_rep_in.columnconfigure(0, weight=1)
+radio_numb_rep_in.columnconfigure(1, weight=1)
+radio_numb_rep_in.columnconfigure(2, weight=1)
+radio_numb_rep_in.columnconfigure(3, weight=1)
+
 numerical_rep_in = StringVar(root, 'hex')
 ttk.Radiobutton(radio_numb_rep_in, text = "Dec", value='dec', variable = numerical_rep_in).grid(column=1, row=0, stick=W)
-ttk.Radiobutton(radio_numb_rep_in, text = "Hex", value='hex', variable = numerical_rep_in).grid(column=1, row=1, stick=W)
-ttk.Radiobutton(radio_numb_rep_in, text = "Bin", value='bin', variable = numerical_rep_in).grid(column=1, row=2, stick=W)
-ttk.Label(radio_numb_rep_in, text = "I\nn\np\nu\nt").grid(column=0, row=0, rowspan=3, stick=N, padx=3)
+ttk.Radiobutton(radio_numb_rep_in, text = "Hex", value='hex', variable = numerical_rep_in).grid(column=2, row=0, stick=W)
+ttk.Radiobutton(radio_numb_rep_in, text = "Bin", value='bin', variable = numerical_rep_in).grid(column=3, row=0, stick=W)
+ttk.Label(radio_numb_rep_in, text = "Input:").grid(column=0, row=0, stick=W)
 # Output
 radio_numb_rep_out = ttk.Frame(mainframe, relief = "solid", padding="2 2 2 2")
-radio_numb_rep_out.grid(column=1, row=11, stick=(W, E))
+radio_numb_rep_out.grid(column=0, row=10, stick=(W, E))
 numerical_rep_out = StringVar(root, '08x')
 numerical_rep_out.trace_add('write', update_memory_view) # Invoke update_memory_view  when numerical_rep is written
 ttk.Radiobutton(radio_numb_rep_out, text = "Hex", value='08x', variable = numerical_rep_out).grid(column=1, row=0, stick=E)
@@ -343,23 +421,38 @@ ttk.Label(radio_numb_rep_out, text = "Output:").grid(column=0, row=0, stick=W)
 
 # Status viewer
 stat_message = ttk.Label(mainframe, text = "")
-stat_message.grid(column=2, row=0, columnspan=2, stick=W)
+stat_message.grid(column=1, row=0, columnspan=2, stick=W)
 
 # Instruction decoder viewer
 idv_A = ttk.Label(mainframe, text="A:", font="TkFixedFont", width=18)
-idv_A.grid(column=2, row=6, stick=W)
+idv_A.grid(column=1, row=6, stick=W)
 
 idv_B = ttk.Label(mainframe, text="B:", font="TkFixedFont", width=18)
-idv_B.grid(column=2, row=7, stick=W)
+idv_B.grid(column=1, row=7, stick=W)
 
 idv_C = ttk.Label(mainframe, text="C:", font="TkFixedFont", width=18)
-idv_C.grid(column=2, row=8, stick=W)
+idv_C.grid(column=2, row=6, stick=W)
 
 idv_Z = ttk.Label(mainframe, text="Z:", font="TkFixedFont", width=18)
-idv_Z.grid(column=3, row=7, stick=W)
+idv_Z.grid(column=2, row=7, stick=W)
 
 for child in mainframe.winfo_children():
 	child.grid_configure(padx=5, pady=5)
+
+# Alphanumerical display
+display = ttk.Frame(mainframe, relief = 'ridge', padding="2 2 2 2")
+display.grid(column=1, row=1, columnspan=2, rowspan=2, stick=(W, E, N, S))
+display_characters = []
+display_lines = 2
+display_columns = 16
+for i in range(display_lines):
+	display_characters.append([])
+	for j in range(display_columns):
+		display_characters[i].append(ttk.Label(display, text = format(j, 'x'), font="TKFixedFont"))
+		display_characters[i][j].grid(column=j, row=i, stick=W)
+
+global cursor_position
+cursor_position = 0
 
 # Initializes the emulator
 reset_program()

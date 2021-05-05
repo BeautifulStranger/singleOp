@@ -1,0 +1,26 @@
+The display is 16x2 characters:
+ ##################
+ #________________#
+ #________________#
+ ##################
+To write <x> to the display, write -<x> to address ff.
+Reading from address ff always returns 0.
+
+Values:
+'NOP','CD',   'NOP',  'LE',   'CL',   'NOP',  'NOP',  'NOP',  'BS',   'NOP',  'LF',   'NOP',  'NOP',  'CR',   'NOP',  'NOP',  #00
+'NOP','NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  'NOP',  #10
+' ',  '!',    '"',    '#',    '$',    '%',    '&',    '\'',   '(',    ')',    '*',    '+',    ',',    '-',    '.',    '/',    #20 
+'0',  '1',    '2',    '3',    '4',    '5',    '6',    '7',    '8',    '9',    ':',    ';',    '<',    '=',    '>',    '?',    #30
+'@',  'A',    'B',    'C',    'D',    'E',    'F',    'G',    'H',    'I',    'J',    'K',    'L',    'M',    'N',    'O',    #40
+'P',  'Q',    'R',    'S',    'T',    'U',    'V',    'W',    'X',    'Y',    'Z',    '[',    '\\',   ']',    '^',    '_',    #50
+'`',  'a',    'b',    'c',    'd',    'e',    'f',    'g',    'h',    'i',    'j',    'k',    'l',    'm',    'n',    'o',    #60
+'p',  'q',    'r',    's',    't',    'u',    'v',    'w',    'x',    'y',    'z',    '{',    '|',    '}',    '~',    'NOP'   #70
+#00   #01     #02     #03     #04     #05     #06     #07     #08     #09     #0a     #0b     #0c     #0d     #0e     #0f 
+
+CD: Clear display
+LE: Move to the end of the line
+CL: Clear current line
+BS: Backspace
+LF: Move to next line
+CR: Jump to start of the line
+NOP: Does nothing
